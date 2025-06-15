@@ -44,6 +44,10 @@ async def start_command(client: Client, message: Message):
             )
         )
 
+    # ✅ Check Force Subscription FIRST (priority check)
+    if not await is_subscribed(client, user_id):
+        return await not_joined(client, message)
+
     # Check if user is an admin and treat them as verified
     if user_id in await db.get_all_admins():
         verify_status = {
@@ -55,7 +59,7 @@ async def start_command(client: Client, message: Message):
     else:
         verify_status = await db.get_verify_status(id)
 
-        # If TOKEN is enabled, handle verification logic
+        # NOW check token verification (only after force sub is satisfied)
         if SHORTLINK_URL or SHORTLINK_API:
             # Fix: Ensure verified_time is a number before comparison
             verified_time = verify_status.get('verified_time', 0)
@@ -99,10 +103,6 @@ async def start_command(client: Client, message: Message):
                     protect_content=False,
                     quote=True
                 )
-
-    # ✅ Check Force Subscription
-    if not await is_subscribed(client, user_id):
-        return await not_joined(client, message)
 
     # File auto-delete time in seconds - Fix: Ensure it's an integer
     try:
@@ -193,7 +193,7 @@ async def start_command(client: Client, message: Message):
 
             try:
                 reload_url = (
-                    f"https://t.me/{client.username}?start={message.command[1]}"
+                    f"<https://t.me/{client.username}?start={message.command>[1]}"
                     if message.command and len(message.command) > 1
                     else None
                 )
@@ -303,7 +303,7 @@ async def not_joined(client: Client, message: Message):
             buttons.append([
                 InlineKeyboardButton(
                     text='♻️ Tʀʏ Aɢᴀɪɴ',
-                    url=f"https://t.me/{client.username}?start={message.command[1]}" if message.command and len(message.command) > 1 else f"https://t.me/{client.username}"
+                    url=f"<https://t.me/{client.username}?start={message.command>[1]}" if message.command and len(message.command) > 1 else f"https://t.me/{client.username}"
                 )
             ])
         except IndexError:
@@ -486,7 +486,7 @@ async def list_premium_users_command(client, message):
 @Bot.on_message(filters.command("count") & filters.private & admin)
 async def total_verify_count_cmd(client, message: Message):
     total = await db.get_total_verify_count()
-    await message.reply_text(f"Tᴏᴛᴀʟ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴋᴇɴs ᴛᴏᴅᴀʏ: <b>{total}</b>")
+    await message.reply_text(f"Tᴏᴛᴀʟ ᴠɪғɪᴇᴅ ᴛᴏᴋᴇɴs ᴛᴏᴅᴀʏ: <b>{total}</b>")
 
 #=====================================================================================##
 
