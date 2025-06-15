@@ -73,20 +73,13 @@ class Bot(Client):
         self.set_parse_mode(ParseMode.HTML)
         self.LOGGER(__name__).info(f"Bot Running..!\n\nCreated by \nhttps://t.me/weebs_support")
         self.LOGGER(__name__).info(f"""       
-
-
  __     __      ______    __  __ _____ _  ______  
  \ \   / //\   |  ____|  |  \/  |_   _| |/ / __ \ 
   \ \_/ //  \  | |__     | \  / | | | | ' / |  | |
    \   // /\ \ |  __|    | |\/| | | | |  <| |  | |
     | |/ ____ \| |____   | |  | |_| |_| . \ |__| |
     |_/_/    \_\______|  |_|  |_|_____|_|\_\____/ 
-                                                  
-                                                  
-
-                                          
-                                          """)
-
+                                         """)
     
         # Start Web Server
         app = web.AppRunner(await web_server())
