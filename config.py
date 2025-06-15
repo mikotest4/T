@@ -5,19 +5,19 @@ from logging.handlers import RotatingFileHandler
 
 #--------------------------------------------
 #Bot token @Botfather
-TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
+TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "7977400767:AAHkdd2XOe--a4iZiHxIrvI0YlQ_3Vkk2Q4")
 APP_ID = int(os.environ.get("APP_ID", "28614709")) #Your API ID from my.telegram.org
 API_HASH = os.environ.get("API_HASH", "f36fd2ee6e3d3a17c4d244ff6dc1bac8") #Your API Hash from my.telegram.org
 #--------------------------------------------
 
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-100")) #Your db channel Id
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002289080994")) #Your db channel Id
 OWNER = os.environ.get("OWNER", "Yae_X_Miko") # Owner username without @
 OWNER_ID = int(os.environ.get("OWNER_ID", "8108281129")) # Owner id
 #--------------------------------------------
 PORT = os.environ.get("PORT", "3000")
 #--------------------------------------------
-DB_URI = os.environ.get("DATABASE_URL", "")
-DB_NAME = os.environ.get("DATABASE_NAME", "")
+DB_URI = os.environ.get("DATABASE_URL", "mongodb+srv://Sanskari:aloksingh@cluster0.cclpr.mongodb.net/?retryWrites=true&w=majority")
+DB_NAME = os.environ.get("DATABASE_NAME", "filesharexbot")
 #--------------------------------------------
 BAN_SUPPORT = os.environ.get("BAN_SUPPORT", None)
 TG_BOT_WORKERS = int(os.environ.get("TG_BOT_WORKERS", "200"))
@@ -26,8 +26,8 @@ START_PIC = os.environ.get("START_PIC", "https://telegra.ph/file/e159ff1c9c3e076
 FORCE_PIC = os.environ.get("FORCE_PIC", "https://telegra.ph/file/e159ff1c9c3e076669a91-fdb27e80269b152e44.jpg")
 
 #--------------------------------------------
-SHORTLINK_URL = os.environ.get("SHORTLINK_URL", "Reel2Earn.com")
-SHORTLINK_API = os.environ.get("SHORTLINK_API", "172d4e8817a3691f035c597f01e57b7208ee17e6")
+SHORTLINK_URL = os.environ.get("SHORTLINK_URL", "reel2earn.com")
+SHORTLINK_API = os.environ.get("SHORTLINK_API", "74508ee9f003899307cca7addf6013053e1f567e")
 VERIFY_EXPIRE = int(os.environ.get('VERIFY_EXPIRE', "86400")) # Add time in seconds
 TUT_VID = os.environ.get("TUT_VID","https://t.me/hwdownload/3")
 
