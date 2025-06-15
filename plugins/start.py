@@ -7,9 +7,13 @@ import string
 import string as rohit
 import time
 from datetime import datetime, timedelta
+from pytz import timezone
 from pyrogram import Client, filters, __version__
 from pyrogram.enums import ParseMode, ChatAction
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, ChatInviteLink, ChatPrivileges
+from pyrogram.types import (
+    Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, 
+    ReplyKeyboardMarkup, ChatInviteLink, ChatPrivileges
+)
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant
 from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated, UserNotParticipant
 from bot import Bot
@@ -18,6 +22,7 @@ from helper_func import *
 from database.database import *
 from database.db_premium import *
 
+# ... [Keep all previous imports and constants unchanged] ...
 
 BAN_SUPPORT = f"{BAN_SUPPORT}"
 TUT_VID = f"{TUT_VID}"
@@ -27,7 +32,6 @@ async def start_command(client: Client, message: Message):
     user_id = message.from_user.id
     id = message.from_user.id
     is_premium = await is_premium_user(id)
-
 
     # Check if user is banned
     banned_users = await db.get_ban_users()
@@ -39,7 +43,6 @@ async def start_command(client: Client, message: Message):
                 [[InlineKeyboardButton("Contact Support", url=BAN_SUPPORT)]]
             )
         )
-
 
     # Check if user is an admin and treat them as verified
     if user_id in await db.get_all_admins():
@@ -92,11 +95,10 @@ async def start_command(client: Client, message: Message):
 
     # ✅ Check Force Subscription
     if not await is_subscribed(client, user_id):
-        #await temp.delete()
         return await not_joined(client, message)
 
     # File auto-delete time in seconds (Set your desired time in seconds here)
-    FILE_AUTO_DELETE = await db.get_del_timer()  # Example: 3600 seconds (1 hour)
+    FILE_AUTO_DELETE = await db.get_del_timer()
 
     # Add user if not already present
     if not await db.present_user(user_id):
@@ -180,7 +182,7 @@ async def start_command(client: Client, message: Message):
 
             try:
                 reload_url = (
-                    f"https://t.me/{client.username}?start={message.command[1]}"
+                    f"<https://t.me/{client.username}?start={message.command>[1]}"
                     if message.command and len(message.command) > 1
                     else None
                 )
@@ -197,13 +199,11 @@ async def start_command(client: Client, message: Message):
     else:
         reply_markup = InlineKeyboardMarkup(
             [
-                    [InlineKeyboardButton("• ᴍᴏʀᴇ ᴄʜᴀɴɴᴇʟs •", url="https://t.me/Nova_Flix/50")],
-
-    [
+                [InlineKeyboardButton("• ᴍᴏʀᴇ ᴄʜᴀɴɴᴇʟs •", url="https://t.me/Nova_Flix/50")],
+                [
                     InlineKeyboardButton("• ᴀʙᴏᴜᴛ", callback_data = "about"),
                     InlineKeyboardButton('ʜᴇʟᴘ •', callback_data = "help")
-
-    ]
+                ]
             ]
         )
         await message.reply_photo(
@@ -219,8 +219,6 @@ async def start_command(client: Client, message: Message):
             message_effect_id=5104841245755180586)  # 🔥
         
         return
-
-
 
 #=====================================================================================##
 
@@ -294,7 +292,7 @@ async def not_joined(client: Client, message: Message):
             buttons.append([
                 InlineKeyboardButton(
                     text='♻️ Tʀʏ Aɢᴀɪɴ',
-                    url=f"https://t.me/{client.username}?start={message.command[1]}"
+                    url=f"<https://t.me/{client.username}?start={message.command>[1]}"
                 )
             ])
         except IndexError:
@@ -323,12 +321,29 @@ async def not_joined(client: Client, message: Message):
 
 @Bot.on_message(filters.command('myplan') & filters.private)
 async def check_plan(client: Client, message: Message):
-    user_id = message.from_user.id  # Get user ID from the message
-
-    # Get the premium status of the user
-    status_message = await check_user_plan(user_id)
-
-    # Send the response message to the user
+    user_id = message.from_user.id
+    
+    try:
+        is_premium = await is_premium_user(user_id)
+        
+        if is_premium:
+            # Get premium user details
+            user_data = await get_premium_user_data(user_id)  # You'll need this function
+            if user_data:
+                expiry_date = user_data.get("expiration_timestamp", "Unknown")
+                status_message = f"<b>✅ Premium Status: Active</b>\n\n<b>Expires:</b> {expiry_date}"
+            else:
+                status_message = "<b>✅ Premium Status: Active</b>\n\n<b>Expires:</b> Unknown"
+        else:
+            status_message = "<b>❌ Premium Status: Not Active</b>\n\n<i>Contact @Yae_X_Miko to purchase premium.</i>"
+            
+    except Exception as e:
+        status_message = f"<b>❌ Error checking premium status:</b>\n<code>{str(e)}</code>"
+    
+    # Ensure message is not empty
+    if not status_message or status_message.strip() == "":
+        status_message = "<b>❌ Unable to retrieve plan status. Please contact support.</b>"
+    
     await message.reply(status_message)
 
 #=====================================================================================##
@@ -381,7 +396,6 @@ async def add_premium_user_command(client, msg):
     except Exception as e:
         await msg.reply_text(f"⚠️ An error occurred: `{str(e)}`")
 
-
 # Command to remove premium user
 @Bot.on_message(filters.command('remove_premium') & filters.private & admin)
 async def pre_remove_user(client: Client, msg: Message):
@@ -394,7 +408,6 @@ async def pre_remove_user(client: Client, msg: Message):
         await msg.reply_text(f"User {user_id} has been removed.")
     except ValueError:
         await msg.reply_text("user_id must be an integer or not available in database.")
-
 
 # Command to list active premium users
 @Bot.on_message(filters.command('premium_users') & filters.private & admin)
@@ -428,7 +441,7 @@ async def list_premium_users_command(client, message):
             user_info = await client.get_users(user_id)
             username = user_info.username if user_info.username else "No Username"
             first_name = user_info.first_name
-            mention=user_info.mention
+            mention = user_info.mention
 
             # Calculate days, hours, minutes, seconds left
             days, hours, minutes, seconds = (
@@ -457,14 +470,12 @@ async def list_premium_users_command(client, message):
     else:
         await message.reply_text("\n\n".join(premium_user_list), parse_mode=None)
 
-
 #=====================================================================================##
 
 @Bot.on_message(filters.command("count") & filters.private & admin)
 async def total_verify_count_cmd(client, message: Message):
     total = await db.get_total_verify_count()
     await message.reply_text(f"Tᴏᴛᴀʟ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴋᴇɴs ᴛᴏᴅᴀʏ: <b>{total}</b>")
-
 
 #=====================================================================================##
 
