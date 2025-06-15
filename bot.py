@@ -5,14 +5,39 @@ import pyromod.listen
 from pyrogram import Client
 from pyrogram.enums import ParseMode
 import sys
+import pytz
 from datetime import datetime
 from config import *
+from database.db_premium import *
+from database.database import *
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import logging
+
+# Suppress APScheduler logs below WARNING level
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
+scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
+scheduler.add_job(remove_expired_users, "interval", seconds=10)
+
+# Reset verify count for all users daily at 00:00 IST
+async def daily_reset_task():
+    try:
+        await db.reset_all_verify_counts()
+    except Exception:
+        pass  
+
+scheduler.add_job(daily_reset_task, "cron", hour=0, minute=0)
+#scheduler.start()
 
 
 name ="""
  BY Yae Miko
 """
 
+def get_indian_time():
+    """Returns the current time in IST."""
+    ist = pytz.timezone("Asia/Kolkata")
+    return datetime.now(ist)
 
 class Bot(Client):
     def __init__(self):
@@ -30,6 +55,7 @@ class Bot(Client):
 
     async def start(self):
         await super().start()
+        scheduler.start()
         usr_bot_me = await self.get_me()
         self.uptime = datetime.now()
 
@@ -40,32 +66,45 @@ class Bot(Client):
             await test.delete()
         except Exception as e:
             self.LOGGER(__name__).warning(e)
-            self.LOGGER(__name__).warning(f"ᴍᴀᴋᴇ sᴜʀᴇ ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ᴅʙ ᴄʜᴀɴɴᴇʟ, ᴀɴᴅ ᴅᴏᴜʙʟᴇ ᴄʜᴇᴄᴋ ᴛʜᴇ CHANNEL_ID ᴠᴀʟᴜᴇ, ᴄᴜʀʀᴇɴᴛ ᴠᴀʟᴜᴇ
-{CHANNEL_ID}")
-            self.LOGGER(__name__).info("\nʙᴏᴛ sᴛᴏᴘᴘᴇᴅ.")
+            self.LOGGER(__name__).warning(f"Make Sure bot is Admin in DB Channel, and Double check the CHANNEL_ID Value, Current Value {CHANNEL_ID}")
+            self.LOGGER(__name__).info("\nBot Stopped. Join https://t.me/weebs_support for support")
             sys.exit()
 
+        self.set_parse_mode(ParseMode.HTML)
+        self.LOGGER(__name__).info(f"Bot Running..!\n\nCreated by \nhttps://t.me/weebs_support")
+        self.LOGGER(__name__).info(f"""       
+
+
+  ___ ___  ___  ___ ___ _    _____  _____  ___ _____ ___ 
+ / __/ _ \|   \| __| __| |  |_ _\ \/ / _ )/ _ \_   _/ __|
+| (_| (_) | |) | _|| _|| |__ | | >  <| _ \ (_) || | \__ \
+ \___\___/|___/|___|_| |____|___/_/\_\___/\___/ |_| |___/
+                                                         
+ 
+                                          """)
+
+    
         # Start Web Server
         app = web.AppRunner(await web_server())
         await app.setup()
         await web.TCPSite(app, "0.0.0.0", PORT).start()
 
 
-        try: await self.send_message(OWNER_ID, text = f"<b>𝙼𝚊𝚜𝚝𝚎𝚛 𝚈𝚘𝚞𝚛 𝙱𝚘𝚝 𝙷𝚊𝚜 𝙱𝚎𝚎𝚗 𝚂𝚝𝚊𝚛𝚝𝚎𝚍!</b>")
+        try: await self.send_message(OWNER_ID, text = f"<b><blockquote> Bᴏᴛ Rᴇsᴛᴀʀᴛᴇᴅ by @Codeflix_Bots</blockquote></b>")
         except: pass
 
     async def stop(self, *args):
         await super().stop()
-        self.LOGGER(__name__).info("ʙᴏᴛ sᴛᴏᴘᴘᴇᴅ.")
+        self.LOGGER(__name__).info("Bot stopped.")
 
     def run(self):
         """Run the bot."""
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.start())
-        self.LOGGER(__name__).info("ʙᴏᴛ ɪs ʀᴜɴɴɪɴɢ ɴᴏᴡ. ᴍᴀᴅᴇ ʙʏ ʏᴀᴇ ᴍɪᴋᴏ")
+        self.LOGGER(__name__).info("Bot is now running. Thanks to @rohit_1888")
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            self.LOGGER(__name__).info("sʜᴜᴛᴛɪɴɢ ᴅᴏᴡɴ...")
+            self.LOGGER(__name__).info("Shutting down...")
         finally:
             loop.run_until_complete(self.stop())
