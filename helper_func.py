@@ -7,6 +7,7 @@ import asyncio
 import time
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from config import *
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant
 from shortzy import Shortzy
@@ -66,6 +67,18 @@ async def is_premium_user_enhanced(user_id):
         logging.error(f"Error in enhanced premium check for user {user_id}: {e}")
         return False
 
+# Don't Remove Credit @CodeFlix_Bots, @rohit_1888
+# Ask Doubt on telegram @CodeflixSupport
+#
+# Copyright (C) 2025 by Codeflix-Bots@Github, < https://github.com/Codeflix-Bots >.
+#
+# This file is part of < https://github.com/Codeflix-Bots/FileStore > project,
+# and is released under the MIT License.
+# Please see < https://github.com/Codeflix-Bots/FileStore/blob/master/LICENSE >
+#
+# All rights reserved.
+#
+
 async def is_subscribed(client, user_id):
     channel_ids = await db.show_channels()
 
@@ -86,6 +99,18 @@ async def is_subscribed(client, user_id):
             return False
 
     return True
+
+# Don't Remove Credit @CodeFlix_Bots, @rohit_1888
+# Ask Doubt on telegram @CodeflixSupport
+#
+# Copyright (C) 2025 by Codeflix-Bots@Github, < https://github.com/Codeflix-Bots >.
+#
+# This file is part of < https://github.com/Codeflix-Bots/FileStore > project,
+# and is released under the MIT License.
+# Please see < https://github.com/Codeflix-Bots/FileStore/blob/master/LICENSE >
+#
+# All rights reserved.
+#
 
 async def is_sub(client, user_id, channel_id):
     try:
@@ -111,6 +136,18 @@ async def is_sub(client, user_id, channel_id):
         print(f"[!] Error in is_sub(): {e}")
         return False
 
+# Don't Remove Credit @CodeFlix_Bots, @rohit_1888
+# Ask Doubt on telegram @CodeflixSupport
+#
+# Copyright (C) 2025 by Codeflix-Bots@Github, < https://github.com/Codeflix-Bots >.
+#
+# This file is part of < https://github.com/Codeflix-Bots/FileStore > project,
+# and is released under the MIT License.
+# Please see < https://github.com/Codeflix-Bots/FileStore/blob/master/LICENSE >
+#
+# All rights reserved.
+#
+
 async def not_joined(client, message):
     channels = await db.show_channels()
     channel_names = []
@@ -123,7 +160,10 @@ async def not_joined(client, message):
             invite_link = chat.invite_link
 
             if not invite_link:
-                invite_link = await client.export_chat_invite_link(channel_id)
+                try:
+                    invite_link = await client.export_chat_invite_link(channel_id)
+                except:
+                    invite_link = f"https://t.me/c/{str(channel_id)[4:]}"
 
             channel_names.append(chat.title)
             button_text = "ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ" if mode == "on" else "ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ"
@@ -149,6 +189,18 @@ async def not_joined(client, message):
         
     except Exception as e:
         print(f"Error sending force subscription message: {e}")
+
+# Don't Remove Credit @CodeFlix_Bots, @rohit_1888
+# Ask Doubt on telegram @CodeflixSupport
+#
+# Copyright (C) 2025 by Codeflix-Bots@Github, < https://github.com/Codeflix-Bots >.
+#
+# This file is part of < https://github.com/Codeflix-Bots/FileStore > project,
+# and is released under the MIT License.
+# Please see < https://github.com/Codeflix-Bots/FileStore/blob/master/LICENSE >
+#
+# All rights reserved.
+#
 
 admin = filters.create(check_admin)
 
@@ -222,6 +274,10 @@ def get_exp_time(seconds):
 async def get_shortlink_rotated(user_id, original_link):
     """Enhanced shortener rotation with proper cycle tracking"""
     try:
+        # Check if shortener system is enabled
+        if not SHORTLINK_URLS or not SHORTLINK_APIS:
+            return original_link
+            
         # Get current shortener status for user
         user_status = await get_user_shortener_status(user_id)
         
@@ -240,12 +296,14 @@ async def get_shortlink_rotated(user_id, original_link):
             used_shorteners = []
             current_shortener_index = 0
         
-        # Update user's shortener tracking
+        # Update user's shortener tracking BEFORE creating the link
         await update_user_shortener_tracking(user_id, current_shortener_index, used_shorteners)
         
         # Create short link with current shortener
         shortener = Shortzy(SHORTLINK_APIS[current_shortener_index], SHORTLINK_URLS[current_shortener_index])
         short_link = await shortener.convert(original_link)
+        
+        logging.info(f"User {user_id} using shortener {current_shortener_index + 1}/{len(SHORTLINK_URLS)}: {SHORTLINK_URLS[current_shortener_index]}")
         
         return short_link
         
@@ -253,10 +311,12 @@ async def get_shortlink_rotated(user_id, original_link):
         logging.error(f"Error in shortener rotation for user {user_id}: {e}")
         # Fallback to first shortener
         try:
-            shortener = Shortzy(SHORTLINK_APIS[0], SHORTLINK_URLS[0])
-            return await shortener.convert(original_link)
-        except:
-            return original_link
+            if SHORTLINK_URLS and SHORTLINK_APIS:
+                shortener = Shortzy(SHORTLINK_APIS[0], SHORTLINK_URLS[0])
+                return await shortener.convert(original_link)
+        except Exception as fallback_error:
+            logging.error(f"Fallback shortener also failed: {fallback_error}")
+        return original_link
 
 async def get_user_shortener_status(user_id):
     """Get user's current shortener rotation status"""
@@ -269,9 +329,9 @@ async def get_user_shortener_status(user_id):
             'next_shortener': shortener_data.get('next_shortener', 0),
             'used_shorteners': used_shorteners,
             'used_count': len(used_shorteners),
-            'total_shorteners': len(SHORTLINK_URLS),
-            'cycle_complete': len(used_shorteners) >= len(SHORTLINK_URLS),
-            'shortener_names': [url.replace('https://', '').replace('http://', '') for url in SHORTLINK_URLS]
+            'total_shorteners': len(SHORTLINK_URLS) if SHORTLINK_URLS else 0,
+            'cycle_complete': len(used_shorteners) >= len(SHORTLINK_URLS) if SHORTLINK_URLS else False,
+            'shortener_names': [url.replace('https://', '').replace('http://', '') for url in SHORTLINK_URLS] if SHORTLINK_URLS else []
         }
     except Exception as e:
         logging.error(f"Error getting shortener status for user {user_id}: {e}")
@@ -279,9 +339,9 @@ async def get_user_shortener_status(user_id):
             'next_shortener': 0,
             'used_shorteners': [],
             'used_count': 0,
-            'total_shorteners': len(SHORTLINK_URLS),
+            'total_shorteners': len(SHORTLINK_URLS) if SHORTLINK_URLS else 0,
             'cycle_complete': False,
-            'shortener_names': [url.replace('https://', '').replace('http://', '') for url in SHORTLINK_URLS]
+            'shortener_names': [url.replace('https://', '').replace('http://', '') for url in SHORTLINK_URLS] if SHORTLINK_URLS else []
         }
 
 async def update_user_shortener_tracking(user_id, used_shortener_index, used_shorteners):
@@ -292,10 +352,10 @@ async def update_user_shortener_tracking(user_id, used_shortener_index, used_sho
             used_shorteners.append(used_shortener_index)
         
         # Calculate next shortener index
-        next_shortener = (used_shortener_index + 1) % len(SHORTLINK_URLS)
+        next_shortener = (used_shortener_index + 1) % len(SHORTLINK_URLS) if SHORTLINK_URLS else 0
         
         # Check if cycle is complete
-        cycle_complete = len(used_shorteners) >= len(SHORTLINK_URLS)
+        cycle_complete = len(used_shorteners) >= len(SHORTLINK_URLS) if SHORTLINK_URLS else False
         
         # If cycle complete, reset for next cycle
         if cycle_complete:
@@ -316,9 +376,10 @@ async def update_user_shortener_tracking(user_id, used_shortener_index, used_sho
         # Update verify status with shortener data
         await db.update_verify_status(
             user_id, 
-            shortener_data=shortener_data,
-            **{k: v for k, v in current_status.items() if k != 'shortener_data'}
+            shortener_data=shortener_data
         )
+        
+        logging.info(f"Updated shortener tracking for user {user_id}: used={used_shorteners}, next={next_shortener}")
         
     except Exception as e:
         logging.error(f"Error updating shortener tracking for user {user_id}: {e}")
@@ -326,8 +387,6 @@ async def update_user_shortener_tracking(user_id, used_shortener_index, used_sho
 async def reset_user_shortener_cycle(user_id):
     """Reset user's shortener cycle - for admin use"""
     try:
-        current_status = await db.get_verify_status(user_id)
-        
         shortener_data = {
             'next_shortener': 0,
             'used_shorteners': [],
@@ -337,9 +396,10 @@ async def reset_user_shortener_cycle(user_id):
         
         await db.update_verify_status(
             user_id,
-            shortener_data=shortener_data,
-            **{k: v for k, v in current_status.items() if k != 'shortener_data'}
+            shortener_data=shortener_data
         )
+        
+        logging.info(f"Reset shortener cycle for user {user_id}")
         return True
     except Exception as e:
         logging.error(f"Error resetting shortener cycle for user {user_id}: {e}")
@@ -354,3 +414,74 @@ async def get_shortlink(url, api):
     except Exception as e:
         logging.error(f"Error creating shortlink: {e}")
         return url
+
+# SHORTENER STATISTICS AND ADMIN FUNCTIONS
+async def get_shortener_stats():
+    """Get global shortener statistics"""
+    try:
+        stats = {
+            'total_shorteners': len(SHORTLINK_URLS) if SHORTLINK_URLS else 0,
+            'shortener_names': [url.replace('https://', '').replace('http://', '') for url in SHORTLINK_URLS] if SHORTLINK_URLS else [],
+            'users_by_shortener': {}
+        }
+        
+        if SHORTLINK_URLS:
+            for i in range(len(SHORTLINK_URLS)):
+                count = await db.get_users_by_shortener(i)
+                stats['users_by_shortener'][i] = count
+        
+        return stats
+    except Exception as e:
+        logging.error(f"Error getting shortener stats: {e}")
+        return {
+            'total_shorteners': 0,
+            'shortener_names': [],
+            'users_by_shortener': {}
+        }
+
+async def reset_all_shortener_cycles():
+    """Reset all users' shortener cycles - for admin use"""
+    try:
+        count = await db.reset_all_shortener_cycles()
+        logging.info(f"Reset shortener cycles for {count} users")
+        return count
+    except Exception as e:
+        logging.error(f"Error resetting all shortener cycles: {e}")
+        return 0
+
+async def get_users_with_incomplete_cycles():
+    """Get list of users with incomplete shortener cycles"""
+    try:
+        return await db.get_users_with_incomplete_cycles()
+    except Exception as e:
+        logging.error(f"Error getting users with incomplete cycles: {e}")
+        return []
+
+# SHORTENER CONFIGURATION CHECK
+def check_shortener_config():
+    """Check if shortener configuration is valid"""
+    try:
+        if not SHORTLINK_URLS or not SHORTLINK_APIS:
+            return False, "Shortener URLs or APIs not configured"
+        
+        if len(SHORTLINK_URLS) != len(SHORTLINK_APIS):
+            return False, f"Mismatch: {len(SHORTLINK_URLS)} URLs vs {len(SHORTLINK_APIS)} APIs"
+        
+        if len(SHORTLINK_URLS) == 0:
+            return False, "No shorteners configured"
+        
+        return True, f"Configuration OK: {len(SHORTLINK_URLS)} shorteners configured"
+    except Exception as e:
+        return False, f"Error checking configuration: {e}"
+
+# Don't Remove Credit @CodeFlix_Bots, @rohit_1888
+# Ask Doubt on telegram @CodeflixSupport
+#
+# Copyright (C) 2025 by Codeflix-Bots@Github, < https://github.com/Codeflix-Bots >.
+#
+# This file is part of < https://github.com/Codeflix-Bots/FileStore > project,
+# and is released under the MIT License.
+# Please see < https://github.com/Codeflix-Bots/FileStore/blob/master/LICENSE >
+#
+# All rights reserved.
+#
