@@ -147,28 +147,58 @@ async def is_sub(client, user_id, channel_id):
 # All rights reserved.
 #
 
-admin = filters.create(check_admin, "AdminFilter")
+async def not_joined(client, message):
+    channels = await db.show_channels()
+    channel_names = []
+    buttons = []
 
-def get_readable_time(seconds: int) -> str:
-    count = 0
-    up_time = ""
-    time_list = []
-    time_suffix_list = ["s", "m", "h", "days"]
-    while count < 4:
-        count += 1
-        remainder, result = divmod(seconds, 60) if count < 3 else divmod(seconds, 24)
-        if seconds == 0 and remainder == 0:
-            break
-        time_list.append(int(result))
-        seconds = int(remainder)
-    hmm = len(time_list)
-    for x in range(hmm):
-        time_list[x] = str(time_list[x]) + time_suffix_list[x]
-    if len(time_list) == 4:
-        up_time += f"{time_list.pop()}, "
-    time_list.reverse()
-    up_time += ":".join(time_list)
-    return up_time
+    for channel_id in channels:
+        try:
+            mode = await db.get_channel_mode(channel_id)
+            chat = await client.get_chat(channel_id)
+            invite_link = chat.invite_link
+
+            if not invite_link:
+                invite_link = await client.export_chat_invite_link(channel_id)
+
+            channel_names.append(chat.title)
+            button_text = "ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ" if mode == "on" else "ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ"
+            buttons.append([InlineKeyboardButton(text=button_text, url=invite_link)])
+        except Exception as e:
+            print(f"Error processing channel {channel_id}: {e}")
+
+    try:
+        buttons.append([InlineKeyboardButton(text='ʀᴇʟᴏᴀᴅ', callback_data='reload')])
+
+        # Construct the joined channel names text
+        if len(channel_names) > 1:
+            joined_channels = ", ".join(channel_names[:-1]) + f" ᴀɴᴅ {channel_names[-1]}"
+        else:
+            joined_channels = channel_names[0] if channel_names else "our channels"
+
+        await message.reply_photo(
+            photo=FORCE_PIC,
+            caption=FORCE_MSG.format(first=message.from_user.first_name, joined_channels=joined_channels),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            quote=True
+        )
+        
+    except Exception as e:
+        print(f"Error sending force subscription message: {e}")
+
+# Don't Remove Credit @CodeFlix_Bots, @rohit_1888
+# Ask Doubt on telegram @CodeflixSupport
+#
+# Copyright (C) 2025 by Codeflix-Bots@Github, < https://github.com/Codeflix-Bots >.
+#
+# This file is part of < https://github.com/Codeflix-Bots/FileStore > project,
+# and is released under the MIT License.
+# Please see < https://github.com/Codeflix-Bots/FileStore/blob/master/LICENSE >
+#
+# All rights reserved.
+#
+
+admin = filters.create(check_admin)
 
 async def encode(string):
     string_bytes = string.encode("ascii")
@@ -188,7 +218,7 @@ async def get_message_id(client, message):
             return message.forward_from_message_id
         else:
             return 0
-    elif message.forward_sender_name:
+    elif message.forward_from:
         return 0
     elif message.text:
         pattern = "https://t.me/(?:c/)?(.*)/(\d+)"
@@ -200,95 +230,156 @@ async def get_message_id(client, message):
         if channel_id.isdigit():
             if f"-100{channel_id}" == str(client.db_channel.id):
                 return msg_id
-        elif channel_id == client.db_channel.username:
-            return msg_id
+        else:
+            if channel_id == client.db_channel.username:
+                return msg_id
     else:
         return 0
 
-def get_name(media):
-    return getattr(media, 'file_name', 'None')
-
-def get_media_file_size(m):
-    media = getattr(m, m.content_type.replace('_', ''), None)
-    if not media:
-        return 0
-    return media.file_size
-
-def humanbytes(size):
-    if not size:
-        return ""
-    power = 2**10
-    n = 0
-    Dic_powerN = {0: ' ', 1: 'K', 2: 'M', 3: 'G', 4: 'T'}
-    while size > power:
-        size /= power
-        n += 1
-    return str(round(size, 2)) + " " + Dic_powerN[n] + 'B'
+def get_readable_time(seconds):
+    count = 0
+    up_time = ""
+    time_list = []
+    time_suffix_list = ["s", "m", "h", "days"]
+    while count < 4:
+        count += 1
+        remainder, result = divmod(seconds, 60) if count < 3 else divmod(seconds, 24)
+        if seconds == 0 and remainder == 0:
+            break
+        time_list.append(int(result))
+        seconds = int(remainder)
+    hmm = len(time_list)
+    for i in range(hmm):
+        time_list[i] = str(time_list[i]) + time_suffix_list[i]
+    if len(time_list) == 4:
+        up_time += f"{time_list.pop()}, "
+    time_list.reverse()
+    up_time += ":".join(time_list)
+    return up_time
 
 def get_exp_time(seconds):
-    periods = [('d', 86400), ('h', 3600), ('m', 60), ('s', 1)]
+    periods = [('days', 86400), ('hours', 3600), ('minutes', 60), ('seconds', 1)]
     result = []
     for period_name, period_seconds in periods:
         if seconds >= period_seconds:
             period_value, seconds = divmod(seconds, period_seconds)
-            result.append(f"{int(period_value)}{period_name}")
-    return " ".join(result) if result else "0s"
+            result.append(f"{period_value} {period_name}")
+    return ', '.join(result)
 
-# SMART SHORTENER ROTATION SYSTEM
-async def get_shortlink_rotated(user_id, original_url):
-    """Get shortlink using rotation system"""
-    from config import SHORTLINK_URLS, SHORTLINK_APIS
-    
-    if not SHORTLINK_URLS or not SHORTLINK_APIS:
-        return original_url
-    
-    # Ensure both lists have the same length
-    if len(SHORTLINK_URLS) != len(SHORTLINK_APIS):
-        logging.error("SHORTLINK_URLS and SHORTLINK_APIS must have the same length")
-        return original_url
-    
-    # Get next shortener for this user
-    shortener_index = await db.get_next_shortener_for_user(user_id, len(SHORTLINK_URLS))
-    
-    # Get the shortener details
-    shortlink_url = SHORTLINK_URLS[shortener_index]
-    shortlink_api = SHORTLINK_APIS[shortener_index]
-    
+# FIXED SHORTENER ROTATION SYSTEM
+async def get_shortlink_rotated(user_id, original_link):
+    """Enhanced shortener rotation with proper cycle tracking"""
     try:
-        # Generate shortlink
-        shortzy = Shortzy(api_key=shortlink_api, base_site=shortlink_url)
-        link = await shortzy.convert(original_url)
+        # Get current shortener status for user
+        user_status = await get_user_shortener_status(user_id)
         
-        # Update user's shortener history
-        await db.update_user_shortener_history(user_id, shortener_index)
+        # Check if user has already used this shortener in current cycle
+        current_shortener_index = user_status['next_shortener']
+        used_shorteners = user_status.get('used_shorteners', [])
         
-        logging.info(f"Generated shortlink for user {user_id} using shortener {shortener_index} ({shortlink_url})")
-        return link
+        # If current shortener was already used, find next unused one
+        if current_shortener_index in used_shorteners:
+            # Find next unused shortener
+            for i in range(len(SHORTLINK_URLS)):
+                if i not in used_shorteners:
+                    current_shortener_index = i
+                    break
+            else:
+                # All shorteners used, reset cycle
+                used_shorteners = []
+                current_shortener_index = 0
+        
+        # Update user's shortener tracking
+        await update_user_shortener_tracking(user_id, current_shortener_index, used_shorteners)
+        
+        # Create short link with current shortener
+        shortener = Shortzy(api=SHORTLINK_APIS[current_shortener_index], url=SHORTLINK_URLS[current_shortener_index])
+        short_link = await shortener.convert(original_link)
+        
+        return short_link
+        
     except Exception as e:
-        logging.error(f"Error generating shortlink with index {shortener_index} ({shortlink_url}): {e}")
-        return original_url
+        logging.error(f"Error in shortener rotation for user {user_id}: {e}")
+        # Fallback to first shortener
+        try:
+            shortener = Shortzy(api=SHORTLINK_APIS[0], url=SHORTLINK_URLS[0])
+            return await shortener.convert(original_link)
+        except:
+            return original_link
 
 async def get_user_shortener_status(user_id):
     """Get user's current shortener rotation status"""
-    from config import SHORTLINK_URLS
-    
-    history = await db.get_user_shortener_history(user_id)
-    used_indices = set(item['index'] for item in history)
-    
-    status = {
-        'total_shorteners': len(SHORTLINK_URLS),
-        'used_count': len(used_indices),
-        'next_shortener': await db.get_next_shortener_for_user(user_id, len(SHORTLINK_URLS)),
-        'cycle_complete': len(used_indices) >= len(SHORTLINK_URLS),
-        'shortener_names': SHORTLINK_URLS
-    }
-    
-    return status
+    try:
+        user_data = await db.get_verify_status(user_id)
+        shortener_data = user_data.get('shortener_data', {})
+        
+        return {
+            'next_shortener': shortener_data.get('next_shortener', 0),
+            'used_shorteners': shortener_data.get('used_shorteners', []),
+            'cycle_complete': shortener_data.get('cycle_complete', False),
+            'shortener_names': [url.replace('https://', '').replace('http://', '') for url in SHORTLINK_URLS]
+        }
+    except Exception as e:
+        logging.error(f"Error getting shortener status for user {user_id}: {e}")
+        return {
+            'next_shortener': 0,
+            'used_shorteners': [],
+            'cycle_complete': False,
+            'shortener_names': [url.replace('https://', '').replace('http://', '') for url in SHORTLINK_URLS]
+        }
 
-# Legacy shortlink function for backward compatibility
-async def get_shortlink(SHORTLINK_URL, SHORTLINK_API, link):
-    """Legacy shortlink function - now uses rotation system"""
-    return link  # Original implementation maintained for compatibility
+async def update_user_shortener_tracking(user_id, used_shortener_index, used_shorteners):
+    """Update user's shortener tracking data"""
+    try:
+        # Add current shortener to used list if not already there
+        if used_shortener_index not in used_shorteners:
+            used_shorteners.append(used_shortener_index)
+        
+        # Calculate next shortener index
+        next_shortener = (used_shortener_index + 1) % len(SHORTLINK_URLS)
+        
+        # Check if cycle is complete
+        cycle_complete = len(used_shorteners) >= len(SHORTLINK_URLS)
+        
+        # If cycle complete, reset for next cycle
+        if cycle_complete:
+            used_shorteners = []
+            next_shortener = 0
+        
+        # Update database
+        await db.update_user_shortener_data(user_id, {
+            'next_shortener': next_shortener,
+            'used_shorteners': used_shorteners,
+            'cycle_complete': cycle_complete,
+            'last_updated': time.time()
+        })
+        
+    except Exception as e:
+        logging.error(f"Error updating shortener tracking for user {user_id}: {e}")
+
+async def reset_user_shortener_cycle(user_id):
+    """Reset user's shortener cycle - for admin use"""
+    try:
+        await db.update_user_shortener_data(user_id, {
+            'next_shortener': 0,
+            'used_shorteners': [],
+            'cycle_complete': False,
+            'last_updated': time.time()
+        })
+        return True
+    except Exception as e:
+        logging.error(f"Error resetting shortener cycle for user {user_id}: {e}")
+        return False
+
+# Legacy shortener function for backward compatibility
+async def get_shortlink(url, api):
+    try:
+        shortener = Shortzy(api=api, url=url)
+        link = await shortener.convert(url)
+        return link
+    except Exception as e:
+        logging.error(f"Error creating shortlink: {e}")
+        return url
 
 # Don't Remove Credit @CodeFlix_Bots, @rohit_1888
 # Ask Doubt on telegram @CodeflixSupport
@@ -301,66 +392,3 @@ async def get_shortlink(SHORTLINK_URL, SHORTLINK_API, link):
 #
 # All rights reserved.
 #
-
-async def not_joined(client, message):
-    buttons = []
-    try:
-        channel_ids = await db.show_channels()
-        for channel_id in channel_ids:
-            try:
-                chat = await client.get_chat(channel_id)
-                
-                # Check for invite link
-                if chat.invite_link:
-                    link = chat.invite_link
-                elif chat.username:
-                    link = f"https://t.me/{chat.username}"
-                else:
-                    try:
-                        link = await client.export_chat_invite_link(channel_id)
-                    except Exception as e:
-                        print(f"Error creating invite link for {channel_id}: {e}")
-                        link = f"https://t.me/c/{str(channel_id)[4:]}"
-                
-                # Check mode for join request handling
-                mode = await db.get_channel_mode(channel_id)
-                if mode == "on":
-                    # Add channel to request tracking
-                    await db.add_reqChannel(channel_id)
-                    buttons.append([InlineKeyboardButton(f"📢 ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ - {chat.title}", url=link)])
-                else:
-                    buttons.append([InlineKeyboardButton(f"📢 ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ - {chat.title}", url=link)])
-                    
-            except Exception as e:
-                print(f"Error processing channel {channel_id}: {e}")
-                continue
-                
-        buttons.append([InlineKeyboardButton("🔄 ʀᴇʟᴏᴀᴅ", callback_data="reload")])
-        
-        if START_PIC:
-            try:
-                await message.reply_photo(
-                    photo=FORCE_PIC,
-                    caption=FORCE_MSG.format(first=message.from_user.first_name),
-                    reply_markup=InlineKeyboardMarkup(buttons),
-                    quote=True,
-                    parse_mode=ParseMode.HTML
-                )
-            except Exception:
-                await message.reply_text(
-                    text=FORCE_MSG.format(first=message.from_user.first_name),
-                    reply_markup=InlineKeyboardMarkup(buttons),
-                    quote=True,
-                    parse_mode=ParseMode.HTML
-                )
-        else:
-            await message.reply_text(
-                text=FORCE_MSG.format(first=message.from_user.first_name),
-                reply_markup=InlineKeyboardMarkup(buttons),
-                quote=True,
-                parse_mode=ParseMode.HTML
-            )
-            
-    except Exception as e:
-        print(f"Error in not_joined function: {e}")
-        await message.reply_text("An error occurred. Please try again later.")
