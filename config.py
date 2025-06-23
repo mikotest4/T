@@ -13,7 +13,16 @@ API_HASH = os.environ.get("API_HASH", "f36fd2ee6e3d3a17c4d244ff6dc1bac8") #Your 
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002583602391")) #Your db channel Id
 OWNER = os.environ.get("OWNER", "Mikoyae756") # Owner username without @
 OWNER_ID = int(os.environ.get("OWNER_ID", "7970350353")) # Owner id
+
 #--------------------------------------------
+# ADMINS LIST - Initialize empty list first
+ADMINS = []
+admins = os.environ.get("ADMINS")
+if admins:
+    for x in admins.split():
+        ADMINS.append(int(x))
+#--------------------------------------------
+
 PORT = os.environ.get("PORT", "9800")
 #--------------------------------------------
 DB_URI = os.environ.get("DATABASE_URL", "mongodb+srv://Sanskari:aloksingh@cluster0.cclpr.mongodb.net/?retryWrites=true&w=majority")
@@ -43,8 +52,8 @@ SHORTLINK_APIS = [
 SHORTLINK_URL = os.environ.get("SHORTLINK_URL", "reel2earn.com")
 SHORTLINK_API = os.environ.get("SHORTLINK_API", "74508ee9f003899307cca7addf6013053e1f567e")
 
-# Verify expire time per shortener (6 hours = 21600 seconds)
-VERIFY_EXPIRE = int(os.environ.get('VERIFY_EXPIRE', "60")) # 6 hours per shortener
+# Verify expire time per shortener (60 seconds for testing, change to 21600 for 6 hours in production)
+VERIFY_EXPIRE = int(os.environ.get('VERIFY_EXPIRE', "60")) # 60 seconds for testing
 TUT_VID = os.environ.get("TUT_VID","https://t.me/hwdownload/3")
 
 #--------------------------------------------
@@ -80,6 +89,7 @@ CMD_TXT = """<blockquote><b>» ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs:</b></blockqu
 <b>›› /count :</b> ᴄᴏᴜɴᴛ verifications
 <b>›› /rotation_stats :</b> ᴠɪᴇᴡ sʜᴏʀᴛᴇɴᴇʀ ʀᴏᴛᴀᴛɪᴏɴ sᴛᴀᴛs
 <b>›› /reset_rotation :</b> ʀᴇsᴇᴛ ᴜsᴇʀ's ʀᴏᴛᴀᴛɪᴏɴ ᴄʏᴄʟᴇ
+<b>›› /shortener_config :</b> sʜᴏᴡ sʜᴏʀᴛᴇɴᴇʀ ᴄᴏɴғɪɢᴜʀᴀᴛɪᴏɴ
 """
 #--------------------------------------------
 CUSTOM_CAPTION = os.environ.get("CUSTOM_CAPTION", None) #set your Custom Caption here, Keep None for Disable Custom Caption
@@ -106,6 +116,7 @@ PRICE5 = os.environ.get("PRICE5", "300 ʀᴜᴘᴇᴇs")
 
 #==========================================================#
 
+# Add OWNER_ID and additional admin IDs to ADMINS list
 ADMINS.append(OWNER_ID)
 ADMINS.append(8108281129)
 
