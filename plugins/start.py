@@ -197,7 +197,7 @@ async def start_command(client: Client, message: Message):
             elif len(argument) == 2:
                 # Single file handling
                 try:
-                    file_id = int(int(argument[1]) / abs(client.db_channel.id)
+                    file_id = int(int(argument[1]) / abs(client.db_channel.id))
                 except (ValueError, ZeroDivisionError):
                     return
                 
