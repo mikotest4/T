@@ -329,4 +329,38 @@ async def not_joined(client, message):
                     await db.add_reqChannel(channel_id)
                     buttons.append([InlineKeyboardButton(f"📢 ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ - {chat.title}", url=link)])
                 else:
-                    buttons.append([InlineKeyboardButton(f"📢 ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ - {chat.title}", url=
+                    buttons.append([InlineKeyboardButton(f"📢 ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ - {chat.title}", url=link)])
+                    
+            except Exception as e:
+                print(f"Error processing channel {channel_id}: {e}")
+                continue
+                
+        buttons.append([InlineKeyboardButton("🔄 ʀᴇʟᴏᴀᴅ", callback_data="reload")])
+        
+        if START_PIC:
+            try:
+                await message.reply_photo(
+                    photo=FORCE_PIC,
+                    caption=FORCE_MSG.format(first=message.from_user.first_name),
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    quote=True,
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception:
+                await message.reply_text(
+                    text=FORCE_MSG.format(first=message.from_user.first_name),
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    quote=True,
+                    parse_mode=ParseMode.HTML
+                )
+        else:
+            await message.reply_text(
+                text=FORCE_MSG.format(first=message.from_user.first_name),
+                reply_markup=InlineKeyboardMarkup(buttons),
+                quote=True,
+                parse_mode=ParseMode.HTML
+            )
+            
+    except Exception as e:
+        print(f"Error in not_joined function: {e}")
+        await message.reply_text("An error occurred. Please try again later.")
