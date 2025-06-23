@@ -60,7 +60,7 @@ async def start_command(client: Client, message: Message):
         verify_status = await db.get_verify_status(id)
 
         # NOW check token verification (only after force sub is satisfied)
-        if SHORTLINK_URL or SHORTLINK_API:
+        if SHORTLINK_URLS and SHORTLINK_APIS:
             # Fix: Ensure verified_time is a number before comparison
             verified_time = verify_status.get('verified_time', 0)
             try:
@@ -91,14 +91,34 @@ async def start_command(client: Client, message: Message):
             if not verify_status['is_verified'] and not is_premium:
                 token = ''.join(random.choices(rohit.ascii_letters + rohit.digits, k=10))
                 await db.update_verify_status(id, verify_token=token, link="")
-                link = await get_shortlink(SHORTLINK_URL, SHORTLINK_API, f'https://telegram.dog/{client.username}?start=verify_{token}')
+                
+                # Use rotated shortener system
+                original_link = f'https://telegram.dog/{client.username}?start=verify_{token}'
+                link = await get_shortlink_rotated(user_id, original_link)
+                
+                # Get user's shortener status for display
+                shortener_status = await get_user_shortener_status(user_id)
+                
                 btn = [
                     [InlineKeyboardButton("• ᴏᴘᴇɴ ʟɪɴᴋ •", url=link), 
                     InlineKeyboardButton('• ᴛᴜᴛᴏʀɪᴀʟ •', url=TUT_VID)],
                     [InlineKeyboardButton('• ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ •', callback_data='premium')]
                 ]
+                
+                # Enhanced message with rotation info
+                cycle_info = ""
+                if shortener_status['cycle_complete']:
+                    cycle_info = "\n🔄 <i>Starting new verification cycle</i>"
+                else:
+                    current_shortener = shortener_status['shortener_names'][shortener_status['next_shortener']]
+                    cycle_info = f"\n📊 <i>Step {shortener_status['used_count'] + 1}/{shortener_status['total_shorteners']} in current cycle ({current_shortener})</i>"
+                
                 return await message.reply(
-                    f"𝗬𝗼𝘂𝗿 𝘁𝗼𝗸𝗲𝗻 𝗵𝗮𝘀 𝗲𝘅𝗽𝗶𝗿𝗲𝗱. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗿𝗲𝗳𝗿𝗲𝘀𝗵 𝘆𝗼𝘂𝗿 𝘁𝗼𝗸𝗲𝗻 𝘁𝗼 𝗰𝗼𝗻𝘁𝗶𝗻𝘂𝗲..\n\n<b>Tᴏᴋᴇɴ Tɪᴍᴇᴏᴜᴛ:</b> {get_exp_time(VERIFY_EXPIRE)}\n\n<b>ᴡʜᴀᴛ ɪs ᴛʜᴇ ᴛᴏᴋᴇɴ??</b>\n\nᴛʜɪs ɪs ᴀɴ ᴀᴅs ᴛᴏᴋᴇɴ. ᴘᴀssɪɴɢ ᴏɴᴇ ᴀᴅ ᴀʟʟᴏᴡs ʏᴏᴜ ᴛᴏ ᴜsᴇ ᴛʜᴇ ʙᴏᴛ ғᴏʀ {get_exp_time(VERIFY_EXPIRE)}</b>",
+                    f"𝗬𝗼𝘂𝗿 𝘁𝗼𝗸𝗲𝗻 𝗵𝗮𝘀 𝗲𝘅𝗽𝗶𝗿𝗲𝗱. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗿𝗲𝗳𝗿𝗲𝘀𝗵 𝘆𝗼𝘂𝗿 𝘁𝗼𝗸𝗲𝗻 𝘁𝗼 𝗰𝗼𝗻𝘁𝗶𝗻𝘂𝗲..\n\n"
+                    f"<b>Tᴏᴋᴇɴ Tɪᴍᴇᴏᴜᴛ:</b> {get_exp_time(VERIFY_EXPIRE)}\n\n"
+                    f"<b>ᴡʜᴀᴛ ɪs ᴛʜᴇ ᴛᴏᴋᴇɴ??</b>\n\n"
+                    f"ᴛʜɪs ɪs ᴀɴ ᴀᴅs ᴛᴏᴋᴇɴ. ᴘᴀssɪɴɢ ᴏɴᴇ ᴀᴅ ᴀʟʟᴏᴡs ʏᴏᴜ ᴛᴏ ᴜsᴇ ᴛʜᴇ ʙᴏᴛ ғᴏʀ {get_exp_time(VERIFY_EXPIRE)} ᴀғᴛᴇʀ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ."
+                    f"{cycle_info}",
                     reply_markup=InlineKeyboardMarkup(btn),
                     protect_content=False,
                     quote=True
@@ -107,129 +127,158 @@ async def start_command(client: Client, message: Message):
     # File auto-delete time in seconds - Fix: Ensure it's an integer
     try:
         FILE_AUTO_DELETE = await db.get_del_timer()
-        FILE_AUTO_DELETE = int(FILE_AUTO_DELETE) if FILE_AUTO_DELETE else 0
+        if not isinstance(FILE_AUTO_DELETE, int):
+            FILE_AUTO_DELETE = int(FILE_AUTO_DELETE) if FILE_AUTO_DELETE else 600
     except (ValueError, TypeError):
-        FILE_AUTO_DELETE = 0
+        FILE_AUTO_DELETE = 600
 
-    # Add user if not already present
+    # Add the user if they're not in the database
     if not await db.present_user(user_id):
         try:
             await db.add_user(user_id)
-        except:
-            pass
+        except Exception as e:
+            print(f"Error adding user {user_id}: {e}")
 
-    # Handle normal message flow
+    # Extract file data from start parameter
     text = message.text
     if len(text) > 7:
         try:
             base64_string = text.split(" ", 1)[1]
         except IndexError:
             return
-
-        string = await decode(base64_string)
-        argument = string.split("-")
-
-        ids = []
-        if len(argument) == 3:
-            try:
-                start = int(int(argument[1]) / abs(client.db_channel.id))
-                end = int(int(argument[2]) / abs(client.db_channel.id))
-                ids = range(start, end + 1) if start <= end else list(range(start, end - 1, -1))
-            except Exception as e:
-                print(f"Error decoding IDs: {e}")
-                return
-
-        elif len(argument) == 2:
-            try:
-                ids = [int(int(argument[1]) / abs(client.db_channel.id))]
-            except Exception as e:
-                print(f"Error decoding ID: {e}")
-                return
-
-        temp_msg = await message.reply("<b>Please wait...</b>")
-        try:
-            messages = await get_messages(client, ids)
-        except Exception as e:
-            await message.reply_text("Something went wrong!")
-            print(f"Error getting messages: {e}")
-            return
-        finally:
-            await temp_msg.delete()
-
-        codeflix_msgs = []
-        for msg in messages:
-            caption = (CUSTOM_CAPTION.format(previouscaption="" if not msg.caption else msg.caption.html, 
-                                             filename=msg.document.file_name) if bool(CUSTOM_CAPTION) and bool(msg.document)
-                       else ("" if not msg.caption else msg.caption.html))
-
-            reply_markup = msg.reply_markup if DISABLE_CHANNEL_BUTTON else None
-
-            try:
-                copied_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, 
-                                            reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
-                codeflix_msgs.append(copied_msg)
-            except FloodWait as e:
-                await asyncio.sleep(e.x)
-                copied_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, 
-                                            reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
-                codeflix_msgs.append(copied_msg)
-            except Exception as e:
-                print(f"Failed to send message: {e}")
-                pass
-
-        if FILE_AUTO_DELETE > 0:
-            notification_msg = await message.reply(
-                f"<b>Tʜɪs Fɪʟᴇ ᴡɪʟʟ ʙᴇ Dᴇʟᴇᴛᴇᴅ ɪɴ  {get_exp_time(FILE_AUTO_DELETE)}. Pʟᴇᴀsᴇ sᴀᴠᴇ ᴏʀ ғᴏʀᴡᴀʀᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ sᴀᴠᴇᴅ ᴍᴇssᴀɢᴇs ʙᴇғᴏʀᴇ ɪᴛ ɢᴇᴛs Dᴇʟᴇᴛᴇᴅ.</b>"
-            )
-
-            await asyncio.sleep(FILE_AUTO_DELETE)
-
-            for snt_msg in codeflix_msgs:    
-                if snt_msg:
-                    try:    
-                        await snt_msg.delete()  
-                    except Exception as e:
-                        print(f"Error deleting message {snt_msg.id}: {e}")
-
-            try:
-                reload_url = (
-                    f"https://t.me/{client.username}?start={message.command[1]}"
-                    if message.command and len(message.command) > 1
-                    else None
-                )
-                keyboard = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("ɢᴇᴛ ғɪʟᴇ ᴀɢᴀɪɴ!", url=reload_url)]]
-                ) if reload_url else None
-
-                await notification_msg.edit(
-                    "<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!\n\nᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ʙᴜᴛᴛᴏɴ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ᴅᴇʟᴇᴛᴇᴅ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ 👇</b>",
-                    reply_markup=keyboard
-                )
-            except Exception as e:
-                print(f"Error updating notification with 'Get File Again' button: {e}")
-    else:
-        reply_markup = InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("ᴄᴜᴛᴇ ʜᴇᴀᴠᴇɴ 10 ᴍᴏʀᴇ ᴍᴇᴍʙᴇʀs", url="https://t.me/+S95mGGbWHFRmNjM1")],
-                [
-                    InlineKeyboardButton("• ᴀʙᴏᴜᴛ", callback_data = "about"),
-                    InlineKeyboardButton('ʜᴇʟᴘ •', callback_data = "help")
-                ]
-            ]
-        )
-        await message.reply_photo(
-            photo=START_PIC,
-            caption=START_MSG.format(
-                first=message.from_user.first_name,
-                last=message.from_user.last_name,
-                username=None if not message.from_user.username else '@' + message.from_user.username,
-                mention=message.from_user.mention,
-                id=message.from_user.id
-            ),
-            reply_markup=reply_markup,
-            message_effect_id=5104841245755180586)  # 🔥
         
-        return
+        try:
+            string = await decode(base64_string)
+            argument = string.split("-")
+            
+            if len(argument) == 3:
+                # Batch file handling
+                try:
+                    start = int(int(argument[1]) / abs(client.db_channel.id))
+                    end = int(int(argument[2]) / abs(client.db_channel.id))
+                    ids = range(start, end+1) if start <= end else []
+                except (ValueError, ZeroDivisionError):
+                    return
+                
+                if len(ids) == 0:
+                    return
+                
+                temp_msg = await message.reply("⏳ Please wait...")
+                
+                messages = await get_messages(client, ids)
+                await temp_msg.delete()
+
+                for msg in messages:
+                    if FILE_AUTO_DELETE:
+                        caption = f"{getattr(msg, 'caption', '') or ''}\n\n<b>⚠️ This file will be deleted in {get_exp_time(FILE_AUTO_DELETE)}.</b>"
+                    else:
+                        caption = getattr(msg, 'caption', '') or ''
+
+                    if CUSTOM_CAPTION and hasattr(msg, ('document', 'video', 'audio')):
+                        caption = CUSTOM_CAPTION.format(previouscaption="" if not getattr(msg, 'caption', None) else msg.caption.html, filename=get_name(msg))
+
+                    try:
+                        copied_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, protect_content=PROTECT_CONTENT, reply_markup=msg.reply_markup)
+                        
+                        if FILE_AUTO_DELETE:
+                            asyncio.create_task(delete_file_after_delay(client, copied_msg, FILE_AUTO_DELETE))
+                    except FloodWait as e:
+                        await asyncio.sleep(e.x)
+                        copied_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, protect_content=PROTECT_CONTENT, reply_markup=msg.reply_markup)
+                        
+                        if FILE_AUTO_DELETE:
+                            asyncio.create_task(delete_file_after_delay(client, copied_msg, FILE_AUTO_DELETE))
+                    except Exception as e:
+                        print(f"Error copying message: {e}")
+                        continue
+                        
+                return
+
+            elif len(argument) == 2:
+                # Single file handling
+                try:
+                    file_id = int(int(argument[1]) / abs(client.db_channel.id)
+                except (ValueError, ZeroDivisionError):
+                    return
+                
+                temp_msg = await message.reply("⏳ Please wait...")
+                try:
+                    msg = await client.get_messages(client.db_channel.id, file_id)
+                    
+                    if FILE_AUTO_DELETE:
+                        caption = f"{getattr(msg, 'caption', '') or ''}\n\n<b>⚠️ This file will be deleted in {get_exp_time(FILE_AUTO_DELETE)}.</b>"
+                    else:
+                        caption = getattr(msg, 'caption', '') or ''
+
+                    if CUSTOM_CAPTION and hasattr(msg, ('document', 'video', 'audio')):
+                        caption = CUSTOM_CAPTION.format(previouscaption="" if not getattr(msg, 'caption', None) else msg.caption.html, filename=get_name(msg))
+
+                    await temp_msg.delete()
+                    
+                    copied_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, protect_content=PROTECT_CONTENT, reply_markup=msg.reply_markup)
+                    
+                    if FILE_AUTO_DELETE:
+                        asyncio.create_task(delete_file_after_delay(client, copied_msg, FILE_AUTO_DELETE))
+                        
+                except Exception as e:
+                    await temp_msg.edit(f"❌ Error: {str(e)}")
+                    return
+                    
+                return
+        except Exception as e:
+            print(f"Error processing file request: {e}")
+            return
+
+    # Regular start message
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("ʜᴇʟᴘ", callback_data='help'),
+         InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data='about')]
+    ])
+
+    if START_PIC:
+        try:
+            await message.reply_photo(
+                photo=START_PIC,
+                caption=START_MSG.format(first=message.from_user.first_name),
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+                quote=True
+            )
+        except Exception:
+            await message.reply_text(
+                text=START_MSG.format(first=message.from_user.first_name),
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+                parse_mode=ParseMode.HTML,
+                quote=True
+            )
+    else:
+        await message.reply_text(
+            text=START_MSG.format(first=message.from_user.first_name),
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+            parse_mode=ParseMode.HTML,
+            quote=True
+        )
+
+# Helper function to get messages
+async def get_messages(client, ids):
+    messages = []
+    for msg_id in ids:
+        try:
+            msg = await client.get_messages(client.db_channel.id, msg_id)
+            messages.append(msg)
+        except:
+            pass
+    return messages
+
+# Helper function to delete files after delay
+async def delete_file_after_delay(client, message, delay):
+    try:
+        await asyncio.sleep(delay)
+        await message.delete()
+    except Exception as e:
+        print(f"Error deleting message: {e}")
 
 #=====================================================================================##
 
@@ -494,5 +543,14 @@ async def total_verify_count_cmd(client, message: Message):
 async def bcmd(bot: Bot, message: Message):        
     reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data = "close")]])
     await message.reply(text=CMD_TXT, reply_markup = reply_markup, quote= True)
+
+#=====================================================================================##
+
+@Bot.on_callback_query(filters.regex("reload"))
+async def reload_btn(client, query):
+    if await is_subscribed(client, query.from_user.id):
+        await query.message.delete()
+        return await query.message.reply("/start", quote=True)
+    await query.answer("❌ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ sᴜʙsᴄʀɪʙᴇᴅ ᴛᴏ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ!", show_alert=True)
 
 #=====================================================================================##
