@@ -51,7 +51,8 @@ class Bot(Client):
             workers=TG_BOT_WORKERS,
             bot_token=TG_BOT_TOKEN
         )
-        self.LOGGER = LOGGER
+        # Fixed: Use proper logger initialization
+        self.LOGGER = logging.getLogger(__name__)
 
     async def start(self):
         await super().start()
@@ -66,35 +67,41 @@ class Bot(Client):
             test = await self.send_message(chat_id = db_channel.id, text = "Test Message")
             await test.delete()
         except Exception as e:
-            self.LOGGER(__name__).warning(e)
-            self.LOGGER(__name__).warning(f"Make Sure bot is Admin in DB Channel, and Double check the CHANNEL_ID Value, Current Value {CHANNEL_ID}")
-            self.LOGGER(__name__).info("\nBot Stopped.")
+            # Fixed: Use proper logger method
+            self.LOGGER.warning(e)
+            self.LOGGER.warning(f"Make Sure bot is Admin in DB Channel, and Double check the CHANNEL_ID Value, Current Value {CHANNEL_ID}")
+            self.LOGGER.info("\nBot Stopped.")
             sys.exit()
 
         self.set_parse_mode(ParseMode.HTML)
-        self.LOGGER(__name__).info(f"ʙᴏᴛ ʀᴜɴɴɪɴɢ ᴍᴀᴅᴇ ʙʏ ʏᴀᴇ ᴍɪᴋᴏ")
+        # Fixed: Use proper logger method
+        self.LOGGER.info(f"ʙᴏᴛ ʀᴜɴɴɪɴɢ ᴍᴀᴅᴇ ʙʏ ʏᴀᴇ ᴍɪᴋᴏ")
     
         # Start Web Server
         app = web.AppRunner(await web_server())
         await app.setup()
         await web.TCPSite(app, "0.0.0.0", PORT).start()
 
-
-        try: await self.send_message(OWNER_ID, text = f"<b>𝙼𝚊𝚜𝚝𝚎𝚛 𝚈𝚘𝚞𝚛 𝙱𝚘𝚝 𝙷𝚊𝚜 𝙱𝚎𝚎𝚗 𝚂𝚝𝚊𝚛𝚝𝚎𝚍!</b>")
-        except: pass
+        try: 
+            await self.send_message(OWNER_ID, text = f"<b>𝙼𝚊𝚜𝚝𝚎𝚛 𝚈𝚘𝚞𝚛 𝙱𝚘𝚝 𝙷𝚊𝚜 𝙱𝚎𝚎𝚗 𝚂𝚝𝚊𝚛𝚝𝚎𝚍!</b>")
+        except: 
+            pass
 
     async def stop(self, *args):
         await super().stop()
-        self.LOGGER(__name__).info("Bot stopped.")
+        # Fixed: Use proper logger method
+        self.LOGGER.info("Bot stopped.")
 
     def run(self):
         """Run the bot."""
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.start())
-        self.LOGGER(__name__).info("ʙᴏᴛ ɪs ɴᴏᴡ ʀᴜɴɴɪɴɢ")
+        # Fixed: Use proper logger method
+        self.LOGGER.info("ʙᴏᴛ ɪs ɴᴏᴡ ʀᴜɴɴɪɴɢ")
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            self.LOGGER(__name__).info( "sʜᴜᴛᴛɪɴɢ ᴅᴏᴡɴ...")
+            # Fixed: Use proper logger method
+            self.LOGGER.info("sʜᴜᴛᴛɪɴɢ ᴅᴏᴡɴ...")
         finally:
             loop.run_until_complete(self.stop())
