@@ -26,7 +26,8 @@ def new_user(id):
             'verified_time': "",
             'verify_token': "",
             'link': ""
-        }
+        },
+        'shortener_history': []
     }
 
 class Yae_X_Miko:
@@ -54,7 +55,7 @@ class Yae_X_Miko:
         return bool(found)
 
     async def add_user(self, user_id: int):
-        await self.user_data.insert_one({'_id': user_id})
+        await self.user_data.insert_one(new_user(user_id))
         return
 
     async def full_userbase(self):
@@ -146,12 +147,7 @@ class Yae_X_Miko:
         return channel_ids
 
     
-# Get current mode of a channel
-    async def get_channel_mode(self, channel_id: int):
-        data = await self.fsub_data.find_one({'_id': channel_id})
-        return data.get("mode", "off") if data else "off"
-
-    # Set mode of a channel
+    # CHANNEL MODE (REQUEST ON/OFF)
     async def set_channel_mode(self, channel_id: int, mode: str):
         await self.fsub_data.update_one(
             {'_id': channel_id},
@@ -159,126 +155,178 @@ class Yae_X_Miko:
             upsert=True
         )
 
-    # REQUEST FORCE-SUB MANAGEMENT
-
-    # Add the user to the set of users for a   specific channel
-    async def req_user(self, channel_id: int, user_id: int):
-        try:
-            await self.rqst_fsub_Channel_data.update_one(
-                {'_id': int(channel_id)},
-                {'$addToSet': {'user_ids': int(user_id)}},
-                upsert=True
-            )
-        except Exception as e:
-            print(f"[DB ERROR] Failed to add user to request list: {e}")
+    async def get_channel_mode(self, channel_id: int):
+        data = await self.fsub_data.find_one({'_id': channel_id})
+        return data.get('mode', 'off') if data else 'off'
 
 
-    # Method 2: Remove a user from the channel set
-    async def del_req_user(self, channel_id: int, user_id: int):
-        # Remove the user from the set of users for the channel
-        await self.rqst_fsub_Channel_data.update_one(
-            {'_id': channel_id}, 
-            {'$pull': {'user_ids': user_id}}
-        )
-
-    # Check if the user exists in the set of the channel's users
-    async def req_user_exist(self, channel_id: int, user_id: int):
-        try:
-            found = await self.rqst_fsub_Channel_data.find_one({
-                '_id': int(channel_id),
-                'user_ids': int(user_id)
-            })
-            return bool(found)
-        except Exception as e:
-            print(f"[DB ERROR] Failed to check request list: {e}")
-            return False  
-
-
-    # Method to check if a channel exists using show_channels
+    # REQUEST FORCE SUB CHANNEL TRACKING
     async def reqChannel_exist(self, channel_id: int):
-    # Get the list of all channel IDs from the database
-        channel_ids = await self.show_channels()
-        #print(f"All channel IDs in the database: {channel_ids}")
+        found = await self.rqst_fsub_Channel_data.find_one({'_id': channel_id})
+        return bool(found)
 
-    # Check if the given channel_id is in the list of channel IDs
-        if channel_id in channel_ids:
-            #print(f"Channel {channel_id} found in the database.")
-            return True
-        else:
-            #print(f"Channel {channel_id} NOT found in the database.")
-            return False
+    async def add_reqChannel(self, channel_id: int):
+        if not await self.reqChannel_exist(channel_id):
+            await self.rqst_fsub_Channel_data.insert_one({'_id': channel_id})
+            return
+
+    async def del_reqChannel(self, channel_id: int):
+        if await self.reqChannel_exist(channel_id):
+            await self.rqst_fsub_Channel_data.delete_one({'_id': channel_id})
+            return
+
+    async def get_req_channels(self):
+        channel_docs = await self.rqst_fsub_Channel_data.find().to_list(length=None)
+        channel_ids = [doc['_id'] for doc in channel_docs]
+        return channel_ids
 
 
+    # REQUEST FORCE SUB USER TRACKING
+    async def req_user_exist(self, channel_id: int, user_id: int):
+        found = await self.rqst_fsub_data.find_one({'_id': f"{channel_id}_{user_id}"})
+        return bool(found)
 
-    # VERIFICATION MANAGEMENT
-    async def db_verify_status(self, user_id):
+    async def req_user(self, channel_id: int, user_id: int):
+        if not await self.req_user_exist(channel_id, user_id):
+            await self.rqst_fsub_data.insert_one({'_id': f"{channel_id}_{user_id}", 'channel_id': channel_id, 'user_id': user_id})
+            return
+
+    async def del_req_user(self, channel_id: int, user_id: int):
+        if await self.req_user_exist(channel_id, user_id):
+            await self.rqst_fsub_data.delete_one({'_id': f"{channel_id}_{user_id}"})
+            return
+
+    async def get_req_users(self, channel_id: int):
+        user_docs = await self.rqst_fsub_data.find({'channel_id': channel_id}).to_list(length=None)
+        user_ids = [doc['user_id'] for doc in user_docs]
+        return user_ids
+
+
+    # VERIFICATION TOKEN SYSTEM
+    async def get_verify_status(self, user_id: int):
         user = await self.user_data.find_one({'_id': user_id})
         if user:
             return user.get('verify_status', default_verify)
         return default_verify
 
-    async def db_update_verify_status(self, user_id, verify):
-        await self.user_data.update_one({'_id': user_id}, {'$set': {'verify_status': verify}})
+    async def update_verify_status(self, user_id: int, **kwargs):
+        if not await self.present_user(user_id):
+            await self.add_user(user_id)
 
-    async def get_verify_status(self, user_id):
-        verify = await self.db_verify_status(user_id)
-        return verify
+        user = await self.user_data.find_one({'_id': user_id})
+        current_verify = user.get('verify_status', default_verify) if user else default_verify
 
-    async def update_verify_status(self, user_id, verify_token="", is_verified=False, verified_time=0, link=""):
-        current = await self.db_verify_status(user_id)
-        current['verify_token'] = verify_token
-        current['is_verified'] = is_verified
-        current['verified_time'] = verified_time
-        current['link'] = link
-        await self.db_update_verify_status(user_id, current)
+        for key, value in kwargs.items():
+            current_verify[key] = value
 
-    # Set verify count (overwrite with new value)
-    async def set_verify_count(self, user_id: int, count: int):
-        await self.sex_data.update_one({'_id': user_id}, {'$set': {'verify_count': count}}, upsert=True)
-
-    # Get verify count (default to 0 if not found)
-    async def get_verify_count(self, user_id: int):
-        user = await self.sex_data.find_one({'_id': user_id})
-        if user:
-            return user.get('verify_count', 0)
-        return 0
-
-    # Reset all users' verify counts to 0
-    async def reset_all_verify_counts(self):
-        await self.sex_data.update_many(
-            {},
-            {'$set': {'verify_count': 0}} 
-        )
-
-    # Get total verify count across all users
-    async def get_total_verify_count(self):
-        pipeline = [
-            {"$group": {"_id": None, "total": {"$sum": "$verify_count"}}}
-        ]
-        result = await self.sex_data.aggregate(pipeline).to_list(length=1)
-        return result[0]["total"] if result else 0
-
-    # Store invite link for a channel
-    async def store_invite_link(self, channel_id: int, invite_link: str, expire_date: int = None):
-        await self.fsub_data.update_one(
-            {'_id': channel_id},
-            {'$set': {
-                'invite_link': invite_link,
-                'link_expire_date': expire_date
-            }},
+        await self.user_data.update_one(
+            {'_id': user_id},
+            {'$set': {'verify_status': current_verify}},
             upsert=True
         )
 
-    # Get stored invite link for a channel
-    async def get_invite_link(self, channel_id: int):
-        data = await self.fsub_data.find_one({'_id': channel_id})
-        if data and 'invite_link' in data:
-            # Check if link has expired
-            if data.get('link_expire_date'):
-                if int(time.time()) >= data['link_expire_date']:
-                    return None
-            return data['invite_link']
-        return None
+    async def get_verify_count(self, user_id: int):
+        user = await self.user_data.find_one({'_id': user_id})
+        return user.get('verify_count', 0) if user else 0
+
+    async def set_verify_count(self, user_id: int, count: int):
+        await self.user_data.update_one(
+            {'_id': user_id},
+            {'$set': {'verify_count': count}},
+            upsert=True
+        )
+
+    async def reset_all_verify_counts(self):
+        await self.user_data.update_many({}, {'$set': {'verify_count': 0}})
+
+
+    # SHORTENER ROTATION TRACKING
+    async def get_user_shortener_history(self, user_id: int):
+        """Get user's shortener usage history"""
+        user = await self.user_data.find_one({'_id': user_id})
+        if user and 'shortener_history' in user:
+            return user['shortener_history']
+        return []
+
+    async def update_user_shortener_history(self, user_id: int, shortener_index: int):
+        """Update user's shortener usage history"""
+        if not await self.present_user(user_id):
+            await self.add_user(user_id)
+            
+        await self.user_data.update_one(
+            {'_id': user_id},
+            {
+                '$push': {
+                    'shortener_history': {
+                        'index': shortener_index,
+                        'used_at': time.time()
+                    }
+                }
+            },
+            upsert=True
+        )
+
+    async def get_next_shortener_for_user(self, user_id: int, total_shorteners: int):
+        """Get next shortener index for user based on rotation"""
+        history = await self.get_user_shortener_history(user_id)
+        
+        if not history:
+            return 0  # First shortener for new user
+        
+        # Get unique shortener indices used
+        used_indices = set(item['index'] for item in history)
+        
+        # If user has used all shorteners, reset and start from 0
+        if len(used_indices) >= total_shorteners:
+            # Clear history and start fresh cycle
+            await self.user_data.update_one(
+                {'_id': user_id},
+                {'$unset': {'shortener_history': ''}}
+            )
+            return 0
+        
+        # Find next unused shortener
+        for i in range(total_shorteners):
+            if i not in used_indices:
+                return i
+        
+        return 0  # Fallback
+
+    async def reset_user_shortener_cycle(self, user_id: int):
+        """Reset user's shortener rotation cycle"""
+        await self.user_data.update_one(
+            {'_id': user_id},
+            {'$unset': {'shortener_history': ''}}
+        )
+
+    async def get_shortener_usage_stats(self, limit: int = 1000):
+        """Get shortener usage statistics"""
+        try:
+            pipeline = [
+                {'$match': {'shortener_history': {'$exists': True, '$ne': []}}},
+                {'$limit': limit},
+                {'$unwind': '$shortener_history'},
+                {'$group': {
+                    '_id': '$shortener_history.index',
+                    'count': {'$sum': 1},
+                    'users': {'$addToSet': '$_id'}
+                }},
+                {'$sort': {'_id': 1}}
+            ]
+            
+            cursor = self.user_data.aggregate(pipeline)
+            stats = []
+            async for doc in cursor:
+                stats.append({
+                    'shortener_index': doc['_id'],
+                    'usage_count': doc['count'],
+                    'unique_users': len(doc['users'])
+                })
+            
+            return stats
+        except Exception as e:
+            logging.error(f"Error getting shortener stats: {e}")
+            return []
 
 
 db = Yae_X_Miko(DB_URI, DB_NAME)
