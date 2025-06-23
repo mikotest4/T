@@ -112,46 +112,41 @@ async def delete_admins(client: Client, message: Message):
 
 @Bot.on_message(filters.command('admins') & filters.private & admin)
 async def get_admins(client: Client, message: Message):
-    try:
-        admins = await db.get_all_admins()
-        
-        if not admins:
-            return await message.reply(
-                "<b>👤 Current Admins:</b>\n\n"
-                f"<blockquote>👑 Owner: <code>{OWNER_ID}</code></blockquote>\n"
-                "<blockquote>ℹ️ No additional admins found.</blockquote>",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cʟᴏsᴇ", callback_data="close")]])
-            )
-        
-        admin_list = f"<b>👤 Current Admins ({len(admins) + 1}):</b>\n\n"
-        admin_list += f"<blockquote>👑 Owner: <code>{OWNER_ID}</code></blockquote>\n"
-        
-        for admin_id in admins:
-            try:
-                user = await client.get_users(admin_id)
-                name = user.first_name if user.first_name else "Unknown"
-                username = f"@{user.username}" if user.username else "No username"
-                admin_list += f"<blockquote>👤 <b>{name}</b> (<code>{admin_id}</code>) - {username}</blockquote>\n"
-            except Exception:
-                admin_list += f"<blockquote>👤 <code>{admin_id}</code> - <i>User info not accessible</i></blockquote>\n"
-        
-        await message.reply(
-            admin_list,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cʟᴏsᴇ", callback_data="close")]])
-        )
-        
-    except Exception as e:
-        await message.reply(f"❌ Error retrieving admins: {str(e)}")
+    pro = await message.reply("<b><i>ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ..</i></b>", quote=True)
+    admin_ids = await db.get_all_admins()
 
-# SHORTENER ROTATION SYSTEM ADMIN COMMANDS
+    reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close")]])
+
+    if not admin_ids:
+        return await pro.edit("<b><blockquote>No admin IDs found.</blockquote></b>", reply_markup=reply_markup)
+
+    admin_list = "<b>👑 ᴀᴠᴀɪʟᴀʙʟᴇ ᴀᴅᴍɪɴs:</b>\n\n"
+    for i, admin_id in enumerate(admin_ids, 1):
+        try:
+            user = await client.get_users(admin_id)
+            name = user.first_name or "Unknown"
+            username = f"@{user.username}" if user.username else "No username"
+            admin_list += f"<b>{i}.</b> <a href='tg://user?id={admin_id}'>{name}</a> ({username})\n"
+            admin_list += f"   └ <code>{admin_id}</code>\n\n"
+        except:
+            admin_list += f"<b>{i}.</b> <code>{admin_id}</code> (Unable to fetch details)\n\n"
+
+    await pro.edit(admin_list, reply_markup=reply_markup, disable_web_page_preview=True)
+
+# Shortener Rotation Statistics
 @Bot.on_message(filters.command('rotation_stats') & admin & filters.private)
 async def rotation_statistics(client: Bot, message: Message):
     """Show shortener rotation statistics"""
     from config import SHORTLINK_URLS, SHORTLINK_APIS
     
     try:
+        pro = await message.reply("📊 <i>Fetching rotation statistics...</i>", quote=True)
+        
         if not SHORTLINK_URLS or not SHORTLINK_APIS:
-            return await message.reply("❌ No shorteners configured.")
+            return await pro.edit(
+                "<b>❌ No shorteners configured</b>\n\n"
+                "Please configure SHORTLINK_URLS and SHORTLINK_APIS in your environment variables."
+            )
         
         # Get all users
         all_users = await db.full_userbase()
@@ -163,10 +158,9 @@ async def rotation_statistics(client: Bot, message: Message):
             'shortener_usage': {i: 0 for i in range(len(SHORTLINK_URLS))}
         }
         
-        # Analyze first 500 users for performance
-        sample_users = all_users[:500]
-        
-        for user_id in sample_users:
+        # Process users (limit to avoid timeout)
+        processed_count = 0
+        for user_id in all_users[:500]:  # Limit to first 500 for performance
             try:
                 history = await db.get_user_shortener_history(user_id)
                 if history:
@@ -179,29 +173,32 @@ async def rotation_statistics(client: Bot, message: Message):
                     for item in history:
                         if item['index'] in stats['shortener_usage']:
                             stats['shortener_usage'][item['index']] += 1
+                
+                processed_count += 1
             except:
                 continue
-        
-        # Get database shortener usage stats
-        db_stats = await db.get_shortener_usage_stats(1000)
         
         # Format response
         response = f"🔄 <b>Shortener Rotation Statistics</b>\n\n"
         response += f"👥 Total Users: {stats['total_users']}\n"
-        response += f"🔄 Users in Rotation (sample): {stats['users_in_cycle']}/{len(sample_users)}\n"
+        response += f"📊 Processed: {processed_count}\n"
+        response += f"🔄 Users in Rotation: {stats['users_in_cycle']}\n"
         response += f"✅ Completed Cycles: {stats['completed_cycles']}\n\n"
-        response += f"📊 <b>Shortener Configuration:</b>\n"
+        response += f"📊 <b>Shortener Usage:</b>\n"
         
         for i, url in enumerate(SHORTLINK_URLS):
-            sample_usage = stats['shortener_usage'].get(i, 0)
-            db_usage = next((stat['usage_count'] for stat in db_stats if stat['shortener_index'] == i), 0)
-            response += f"{i+1}. {url}\n"
-            response += f"   📈 Sample Usage: {sample_usage}\n"
-            response += f"   💾 DB Usage: {db_usage}\n\n"
+            usage_count = stats['shortener_usage'].get(i, 0)
+            api_configured = "✅" if i < len(SHORTLINK_APIS) and SHORTLINK_APIS[i] != "your_api_key_here" else "❌"
+            response += f"{i+1}. {url} {api_configured}\n   └ Uses: {usage_count}\n\n"
         
-        response += f"⚠️ <i>Sample shows first {len(sample_users)} users only</i>"
+        response += f"\n⏱️ <i>Verification Time: {get_exp_time(VERIFY_EXPIRE)} per shortener</i>"
         
-        await message.reply(response, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]]))
+        await pro.edit(
+            response,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="close")
+            ]])
+        )
         
     except Exception as e:
         await message.reply(f"❌ Error getting rotation stats: {str(e)}")
@@ -212,134 +209,85 @@ async def reset_user_rotation(client: Bot, message: Message):
     try:
         if len(message.command) < 2:
             return await message.reply(
-                "📝 <b>Usage:</b>\n"
-                "<code>/reset_rotation [user_id]</code>\n"
-                "<code>/reset_rotation all</code> - Reset all users",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
-            )
-        
-        if message.command[1].lower() == "all":
-            # Reset all users
-            temp_msg = await message.reply("🔄 Resetting rotation for all users...")
-            
-            try:
-                all_users = await db.full_userbase()
-                reset_count = 0
-                
-                for user_id in all_users[:1000]:  # Limit for performance
-                    try:
-                        await db.reset_user_shortener_cycle(user_id)
-                        reset_count += 1
-                    except:
-                        continue
-                
-                await temp_msg.edit(
-                    f"✅ Reset shortener rotation cycle for {reset_count} users",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
-                )
-                
-            except Exception as e:
-                await temp_msg.edit(f"❌ Error during bulk reset: {str(e)}")
-        else:
-            # Reset specific user
-            user_id = int(message.command[1])
-            await db.reset_user_shortener_cycle(user_id)
-            
-            await message.reply(
-                f"✅ Reset shortener rotation cycle for user <code>{user_id}</code>",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
-            )
-        
-    except ValueError:
-        await message.reply(
-            "❌ Invalid user ID. Please provide a valid number.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
-        )
-    except Exception as e:
-        await message.reply(f"❌ Error: {str(e)}")
-
-@Bot.on_message(filters.command('check_user_rotation') & admin & filters.private)
-async def check_user_rotation_status(client: Bot, message: Message):
-    """Check specific user's rotation status"""
-    try:
-        if len(message.command) < 2:
-            return await message.reply(
-                "📝 <b>Usage:</b>\n<code>/check_user_rotation [user_id]</code>",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
+                "<b>Usage:</b> <code>/reset_rotation [user_id]</code>\n\n"
+                "<b>Example:</b> <code>/reset_rotation 1234567890</code>",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="close")
+                ]])
             )
         
         user_id = int(message.command[1])
         
-        # Get user's rotation status
-        shortener_status = await get_user_shortener_status(user_id)
-        history = await db.get_user_shortener_history(user_id)
+        # Check if user exists
+        if not await db.present_user(user_id):
+            return await message.reply(
+                f"❌ User {user_id} not found in database.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="close")
+                ]])
+            )
         
-        # Get user info
-        try:
-            user = await client.get_users(user_id)
-            user_name = user.first_name if user.first_name else "Unknown"
-        except:
-            user_name = "Unknown"
-        
-        response = f"👤 <b>User Rotation Status</b>\n\n"
-        response += f"🆔 User ID: <code>{user_id}</code>\n"
-        response += f"👤 Name: {user_name}\n\n"
-        response += f"📊 <b>Rotation Info:</b>\n"
-        response += f"🔢 Total Shorteners: {shortener_status['total_shorteners']}\n"
-        response += f"✅ Used Count: {shortener_status['used_count']}\n"
-        response += f"🔄 Cycle Complete: {'Yes' if shortener_status['cycle_complete'] else 'No'}\n"
-        
-        if not shortener_status['cycle_complete']:
-            next_shortener = shortener_status['shortener_names'][shortener_status['next_shortener']]
-            response += f"➡️ Next Shortener: {next_shortener}\n"
-        
-        response += f"\n📜 <b>Usage History:</b>\n"
-        if history:
-            for item in history[-5:]:  # Show last 5 entries
-                shortener_name = shortener_status['shortener_names'][item['index']]
-                used_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(item['used_at']))
-                response += f"• {shortener_name} - {used_time}\n"
-        else:
-            response += "• No usage history found\n"
+        # Reset the cycle
+        await db.reset_user_shortener_cycle(user_id)
         
         await message.reply(
-            response,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
+            f"✅ <b>Reset Complete</b>\n\n"
+            f"Shortener rotation cycle has been reset for user: <code>{user_id}</code>\n\n"
+            f"The user will start from the first shortener on their next verification.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="close")
+            ]])
         )
         
     except ValueError:
-        await message.reply("❌ Invalid user ID. Please provide a valid number.")
+        await message.reply(
+            "❌ <b>Invalid User ID</b>\n\n"
+            "Please provide a valid numeric user ID.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="close")
+            ]])
+        )
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
 
 @Bot.on_message(filters.command('shortener_config') & admin & filters.private)
-async def show_shortener_config(client: Bot, message: Message):
+async def shortener_config(client: Bot, message: Message):
     """Show current shortener configuration"""
+    from config import SHORTLINK_URLS, SHORTLINK_APIS, VERIFY_EXPIRE
+    
     try:
-        from config import SHORTLINK_URLS, SHORTLINK_APIS, VERIFY_EXPIRE
-        
         response = f"⚙️ <b>Shortener Configuration</b>\n\n"
+        response += f"⏱️ <b>Verification Time:</b> {get_exp_time(VERIFY_EXPIRE)} per shortener\n\n"
         
-        if not SHORTLINK_URLS or not SHORTLINK_APIS:
-            response += "❌ No shorteners configured\n"
-            response += "Please set SHORTLINK_URLS and SHORTLINK_APIS in your environment variables."
+        if not SHORTLINK_URLS:
+            response += "❌ <b>No shorteners configured</b>"
         else:
-            response += f"🔢 Total Shorteners: {len(SHORTLINK_URLS)}\n"
-            response += f"⏰ Verify Expire: {get_exp_time(VERIFY_EXPIRE)} per shortener\n"
-            response += f"🔄 Total Cycle Time: {get_exp_time(VERIFY_EXPIRE * len(SHORTLINK_URLS))}\n\n"
+            response += f"📊 <b>Configured Shorteners:</b> {len(SHORTLINK_URLS)}\n\n"
             
-            response += f"📋 <b>Configured Shorteners:</b>\n"
             for i, url in enumerate(SHORTLINK_URLS):
-                api_status = "✅ Set" if i < len(SHORTLINK_APIS) and SHORTLINK_APIS[i] else "❌ Missing"
-                response += f"{i+1}. {url} - API: {api_status}\n"
+                api_status = "✅ Configured" if i < len(SHORTLINK_APIS) and SHORTLINK_APIS[i] != "your_api_key_here" else "❌ Not configured"
+                response += f"{i+1}. <b>{url}</b>\n   └ API: {api_status}\n\n"
             
-            if len(SHORTLINK_URLS) != len(SHORTLINK_APIS):
-                response += f"\n⚠️ <b>Warning:</b> URLs ({len(SHORTLINK_URLS)}) and APIs ({len(SHORTLINK_APIS)}) count mismatch!"
+            total_time = len(SHORTLINK_URLS) * VERIFY_EXPIRE
+            response += f"🎯 <b>Total cycle time:</b> {get_exp_time(total_time)}"
         
         await message.reply(
             response,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔄 Rotation Stats", callback_data="get_rotation_stats"),
+                InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="close")
+            ]])
         )
         
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
+
+# Handle callback for rotation stats
+@Bot.on_callback_query(filters.regex("get_rotation_stats"))
+async def get_rotation_stats_callback(client: Bot, callback_query: CallbackQuery):
+    """Handle rotation stats callback"""
+    await callback_query.answer()
+    # Create a fake message to reuse the rotation_statistics function
+    fake_message = callback_query.message
+    fake_message.command = ['rotation_stats']
+    await rotation_statistics(client, fake_message)
